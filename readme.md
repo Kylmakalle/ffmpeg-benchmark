@@ -1,4 +1,4 @@
-# FFmpeg Benchmark
+# Hetzner FFmpeg Benchmark
 
 ```shell
 apt-get update && apt install ffmpeg -y

@@ -2,6 +2,7 @@
 
 ```shell
 apt-get update && apt install ffmpeg -y
+git clone https://github.com/Kylmakalle/ffmpeg-benchmark
 cd ffmpeg-benchmark
 python3 main.py
 ```

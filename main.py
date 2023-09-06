@@ -230,7 +230,7 @@ async def main():
     input_video = "input.mp4" # "heavy_video.mp4"
     dimensions_limit = 384
     size_limit = 8389000
-    for num_conversions in [10, 20, 30]:
+    for num_conversions in [2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]:
         await benchmark(
             input_video, "output/", dimensions_limit, size_limit, num_conversions
         )

@@ -3,6 +3,8 @@ import time
 import subprocess
 import os
 import json
+import shutil
+import glob
 
 
 class ShellException(Exception):
@@ -94,22 +96,31 @@ async def shell(
             raise ShellException(
                 f"Timed-out command after {timeout}s. {description or ''}",
                 cmd=cmd,
-                stderr=process.stderr,
-                stdout=process.stdout,
+                stderr=process.stderr.decode(),
+                stdout=process.stdout.decode(),
                 returncode=0,
             )
     else:
         await process.wait()
+
+    stdout, stderr = await process.communicate()
     if process.returncode != 0:
-        raise Exception(
+        raise ShellException(
             message=description,
             cmd=cmd,
-            stderr=process.stderr,
-            stdout=process.stdout,
+            stderr=stderr.decode(),
+            stdout=stdout.decode(),
             returncode=process.returncode,
         )
-    return process.stdout or process.stderr
+    return stdout.decode() if stdout else stderr.decode()
 
+async def check_nvidia_gpu():
+    try:
+        result = await shell("nvidia-smi", "Checking for NVIDIA GPU", timeout=5)
+        return "NVIDIA-SMI" in result
+    except Exception:
+        raise
+        return False
 
 async def benchmark(
     input_video: str,
@@ -117,12 +128,20 @@ async def benchmark(
     dimensions_limit: int,
     size_limit: int,
     num_conversions: int,
+    has_nvidia: bool
 ):
     print(
         f"Starting {num_conversions} conversions.",
     )
-    await shell(f"rm -rf {output_prefix}*.mp4", "")
-    await shell(f"mkdir -p {output_prefix}", "")
+    mp4_files = glob.glob(f"{output_prefix}*.mp4")
+    for file in mp4_files:
+        try:
+            os.remove(file)
+        except OSError as e:
+            print(f"Error: {e.strerror}")
+
+    # Create the directory if it doesn't exist
+    os.makedirs(output_prefix, exist_ok=True)
     start = time.time()
     tasks = []
 
@@ -130,7 +149,7 @@ async def benchmark(
         output_video = f"{output_prefix}_{i}.mp4"
         task = asyncio.ensure_future(
             convert(
-                input_video, output_video, dimensions_limit, size_limit
+                input_video, output_video, dimensions_limit, size_limit, has_nvidia=has_nvidia
             )
         )
         tasks.append(task)
@@ -152,6 +171,7 @@ async def convert(
     bitrate_margin_error_percentage: int = 2,
     recommended_bitrate: int = 2000000,
     timeout: int = None,
+    has_nvidia: bool = False
 ) -> str:
     start_time = time.time()
     video_info = await get_video_info(input_video)
@@ -200,19 +220,24 @@ async def convert(
     )
 
     ffmpeg_options = [
-        "-preset",
-        "superfast",
+        "-preset", "p1" if has_nvidia else "superfast",  # p1-p7 for NVENC, lower is faster
         "-sn",
         "-dn",
         *options,
         *duration_option,
-        "-b:v",
-        str(bitrate),
+        "-b:v", str(bitrate),
     ]
+
+    
+    if has_nvidia:
+        nvidia_ffmpeg_prefix = ["-hwaccel", "cuda"]
+        ffmpeg_options = ffmpeg_options + ["-c:v", "h264_nvenc"]
+    else:
+        nvidia_ffmpeg_prefix = []
 
     await shell(
         " ".join(
-            ["ffmpeg", "-hide_banner", "-i", input_video]
+            ["ffmpeg", "-hide_banner", *nvidia_ffmpeg_prefix, "-i", input_video]
             + ffmpeg_options
             + [output_video]
         ),
@@ -230,9 +255,12 @@ async def main():
     input_video = "input.mp4" # "heavy_video.mp4"
     dimensions_limit = 384
     size_limit = 8389000
-    for num_conversions in [2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]:
+    has_nvidia = await check_nvidia_gpu()
+    if not has_nvidia:
+        print("NVIDIA GPU not detected. Using CPU encoding.")
+    for num_conversions in [2, 5, 7, 8, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]:
         await benchmark(
-            input_video, "output/", dimensions_limit, size_limit, num_conversions
+            input_video, "output/", dimensions_limit, size_limit, num_conversions, has_nvidia
         )
 
 

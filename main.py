@@ -5,6 +5,7 @@ import os
 import json
 import shutil
 import glob
+import platform
 
 
 class ShellException(Exception):
@@ -114,13 +115,18 @@ async def shell(
         )
     return stdout.decode() if stdout else stderr.decode()
 
+
+def check_apple_silicon():
+    return platform.system().lower() == "darwin" and platform.machine() == "arm64"
+
+
 async def check_nvidia_gpu():
     try:
         result = await shell("nvidia-smi", "Checking for NVIDIA GPU", timeout=5)
         return "NVIDIA-SMI" in result
     except Exception:
-        raise
         return False
+
 
 async def benchmark(
     input_video: str,
@@ -128,7 +134,8 @@ async def benchmark(
     dimensions_limit: int,
     size_limit: int,
     num_conversions: int,
-    has_nvidia: bool
+    has_nvidia: bool,
+    has_apple_silicon: bool,
 ):
     print(
         f"Starting {num_conversions} conversions.",
@@ -149,7 +156,12 @@ async def benchmark(
         output_video = f"{output_prefix}_{i}.mp4"
         task = asyncio.ensure_future(
             convert(
-                input_video, output_video, dimensions_limit, size_limit, has_nvidia=has_nvidia
+                input_video,
+                output_video,
+                dimensions_limit,
+                size_limit,
+                has_nvidia=has_nvidia,
+                has_apple_silicon=has_apple_silicon,
             )
         )
         tasks.append(task)
@@ -171,7 +183,8 @@ async def convert(
     bitrate_margin_error_percentage: int = 2,
     recommended_bitrate: int = 2000000,
     timeout: int = None,
-    has_nvidia: bool = False
+    has_nvidia: bool = False,
+    has_apple_silicon: bool = False,
 ) -> str:
     start_time = time.time()
     video_info = await get_video_info(input_video)
@@ -220,20 +233,22 @@ async def convert(
     )
 
     ffmpeg_options = [
-        "-preset", "p1" if has_nvidia else "superfast",  # p1-p7 for NVENC, lower is faster
+        "-preset",
+        "p1" if has_nvidia else "superfast",  # p1-p7 for NVENC, lower is faster
         "-sn",
         "-dn",
         *options,
         *duration_option,
-        "-b:v", str(bitrate),
+        "-b:v",
+        str(bitrate),
     ]
 
-    
+    nvidia_ffmpeg_prefix = []
     if has_nvidia:
         nvidia_ffmpeg_prefix = ["-hwaccel", "cuda"]
         ffmpeg_options = ffmpeg_options + ["-c:v", "h264_nvenc"]
-    else:
-        nvidia_ffmpeg_prefix = []
+    elif has_apple_silicon:
+        ffmpeg_options = ffmpeg_options + ["-c:v", "h264_videotoolbox"]
 
     await shell(
         " ".join(
@@ -252,15 +267,40 @@ async def convert(
 
 async def main():
     # Assume test_video.mp4 exists in the cloned repo.
-    input_video = "input.mp4" # "heavy_video.mp4"
+    input_video = "input.mp4"  # "heavy_video.mp4"
     dimensions_limit = 384
     size_limit = 8389000
     has_nvidia = await check_nvidia_gpu()
-    if not has_nvidia:
-        print("NVIDIA GPU not detected. Using CPU encoding.")
-    for num_conversions in [2, 5, 7, 8, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]:
+    if has_nvidia:
+        print("NVIDIA GPU detected")
+    has_apple_silicon = check_apple_silicon()
+    if has_apple_silicon:
+        print("Apple Silicon detected")
+    for num_conversions in [
+        2,
+        5,
+        8,
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        90,
+        100,
+        110,
+        120,
+    ]:
         await benchmark(
-            input_video, "output/", dimensions_limit, size_limit, num_conversions, has_nvidia
+            input_video,
+            "output/",
+            dimensions_limit,
+            size_limit,
+            num_conversions,
+            has_nvidia,
+            has_apple_silicon,
         )
 
 

@@ -243,19 +243,21 @@ async def convert(
         str(bitrate),
     ]
 
-    nvidia_ffmpeg_prefix = []
+    decoder_options = []
     if has_nvidia:
-        nvidia_ffmpeg_prefix = ["-hwaccel", "cuda"]
+        decoder_options = ["-hwaccel", "cuda", "-c:v", "h264_nvenc"]
         ffmpeg_options = ffmpeg_options + ["-c:v", "h264_nvenc"]
     elif has_apple_silicon:
+        decoder_options = ["-hwaccel", "videotoolbox"]
         ffmpeg_options = ffmpeg_options + ["-c:v", "h264_videotoolbox"]
 
+    command = " ".join(
+        ["ffmpeg", "-hide_banner", *decoder_options, "-i", input_video]
+        + ffmpeg_options
+        + [output_video]
+    )
     await shell(
-        " ".join(
-            ["ffmpeg", "-hide_banner", *nvidia_ffmpeg_prefix, "-i", input_video]
-            + ffmpeg_options
-            + [output_video]
-        ),
+        command,
         "Resize",
         timeout=timeout,
     )

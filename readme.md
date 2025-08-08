@@ -1,4 +1,4 @@
-# Hetzner FFmpeg Benchmark
+# FFmpeg Benchmark
 
 ## Linux
 
@@ -29,6 +29,10 @@ Run the benchmark on cpu and gpu
 python3 main.py
 python3 main.py --gpu
 ```
+
+## Results
+
+### Hetzner
 
 |   Parallel runs/seconds for full run  |   CCX33 (8/32) (dedicated)  |   CAX41 (16/32) arm  |   CPX51 (16/32)  |   CCX53 (32/128) (dedicated)  |   CCX63 (48/192) (dedicated)  |   VM Xeon v4 (32/32) (dedicated)  |
 |---------------------------------------|-----------------------------|----------------------|------------------|-------------------------------|-------------------------------|-----------------------------------|

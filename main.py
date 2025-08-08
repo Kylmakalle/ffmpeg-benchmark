@@ -1,11 +1,11 @@
+import argparse
 import asyncio
 import time
-import subprocess
 import os
 import json
-import shutil
 import glob
 import platform
+import sys
 
 
 class ShellException(Exception):
@@ -22,7 +22,6 @@ class ShellException(Exception):
         self.stdout = stdout
         self.stderr = stderr
         self.returncode = returncode
-
         super().__init__(message)
 
     def __str__(self) -> str:
@@ -63,7 +62,6 @@ async def get_video_info(input_video) -> dict:
             video_bitrate = stream.get("bit_rate")
             if video_bitrate:
                 video_info["video_bitrate"] = int(video_bitrate)
-
         elif stream["codec_type"] == "audio":
             video_info["audio_codec"] = stream["codec_name"]
             if video_info["audio_bitrate"]:
@@ -74,7 +72,6 @@ async def get_video_info(input_video) -> dict:
                     video_info["audio_bitrate"] = int(audio_bitrate)
 
     video_info["duration"] = float(json_data["format"]["duration"])
-
     return video_info
 
 
@@ -137,9 +134,7 @@ async def benchmark(
     has_nvidia: bool,
     has_apple_silicon: bool,
 ):
-    print(
-        f"Starting {num_conversions} conversions.",
-    )
+    print(f"Starting {num_conversions} conversions.")
     mp4_files = glob.glob(f"{output_prefix}*.mp4")
     for file in mp4_files:
         try:
@@ -168,10 +163,8 @@ async def benchmark(
 
     results = await asyncio.gather(*tasks)
     individual_times = [res[1] for res in results]
-    # print(f"Individual Conversion Times: {individual_times}")
-
     end = time.time()
-    print(f"Completed {num_conversions} conversions in {end - start} seconds.")
+    print(f"Completed {num_conversions} conversions in {end - start:.2f} seconds.")
 
 
 async def convert(
@@ -256,11 +249,8 @@ async def convert(
         + ffmpeg_options
         + [output_video]
     )
-    await shell(
-        command,
-        "Resize",
-        timeout=timeout,
-    )
+    await shell(command, "Resize", timeout=timeout)
+
     end_time = time.time()
     elapsed_time = end_time - start_time
     print(f"Conversion for {output_video} took {elapsed_time:.2f} seconds.")
@@ -268,33 +258,37 @@ async def convert(
 
 
 async def main():
-    # Assume test_video.mp4 exists in the cloned repo.
-    input_video = "input.mp4"  # "heavy_video.mp4"
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        help="Use GPU acceleration (NVIDIA or Apple Silicon)",
+    )
+    args = parser.parse_args()
+
+    input_video = "input.mp4"
     dimensions_limit = 384
     size_limit = 8389000
-    has_nvidia = await check_nvidia_gpu()
-    if has_nvidia:
-        print("NVIDIA GPU detected")
-    has_apple_silicon = check_apple_silicon()
-    if has_apple_silicon:
-        print("Apple Silicon detected")
-    for num_conversions in [
-        2,
-        5,
-        8,
-        10,
-        20,
-        30,
-        40,
-        50,
-        60,
-        70,
-        80,
-        90,
-        100,
-        110,
-        120,
-    ]:
+
+    has_nvidia = False
+    has_apple_silicon = False
+
+    if args.gpu:
+        print("Requested GPU acceleration.")
+        has_nvidia = await check_nvidia_gpu()
+        has_apple_silicon = check_apple_silicon()
+
+        if has_nvidia:
+            print("✅ NVIDIA GPU detected")
+        elif has_apple_silicon:
+            print("✅ Apple Silicon detected")
+        else:
+            print("❌ No supported GPU found. Exiting.")
+            sys.exit(1)
+    else:
+        print("Running without GPU acceleration.")
+
+    for num_conversions in [2, 5, 8, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]:
         await benchmark(
             input_video,
             "output/",

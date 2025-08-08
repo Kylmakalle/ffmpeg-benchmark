@@ -1,10 +1,33 @@
 # Hetzner FFmpeg Benchmark
 
+## Linux
+
 ```shell
 apt-get update && apt install ffmpeg -y
+```
+
+## macOS
+
+Install [brew](https://brew.sh/)
+
+```shell
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+```shell
+brew install ffmpeg
+```
+
+```shell
 git clone https://github.com/Kylmakalle/ffmpeg-benchmark
 cd ffmpeg-benchmark
+```
+
+Run the benchmark on cpu and gpu
+
+```shell
 python3 main.py
+python3 main.py --gpu
 ```
 
 |   Parallel runs/seconds for full run  |   CCX33 (8/32) (dedicated)  |   CAX41 (16/32) arm  |   CPX51 (16/32)  |   CCX53 (32/128) (dedicated)  |   CCX63 (48/192) (dedicated)  |   VM Xeon v4 (32/32) (dedicated)  |
